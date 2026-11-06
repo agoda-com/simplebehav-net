@@ -8,7 +8,7 @@ namespace SimpleBehav;
 /// When&lt;T&gt; constructs T via its public IPage constructor.
 /// Starts a Playwright trace on every scenario; the zip is written alongside demo.html.
 /// </summary>
-public sealed class PlaywrightBuilder : ISystemUnderTestBuilder
+public sealed class PlaywrightBuilder : ISystemUnderTestBuilder, IScenarioTrace
 {
     private static readonly object TraceViewerCopyLock = new();
     private readonly IPage _page;
@@ -50,6 +50,8 @@ public sealed class PlaywrightBuilder : ISystemUnderTestBuilder
 
     public async Task StopTraceAsync(string tracePath) =>
         await _page.Context.Tracing.StopAsync(new() { Path = tracePath });
+
+    void IScenarioTrace.EnsureViewer(string artifactsRoot) => EnsureTraceViewer(artifactsRoot);
 
     public static void EnsureTraceViewer(string artifactsRoot)
     {

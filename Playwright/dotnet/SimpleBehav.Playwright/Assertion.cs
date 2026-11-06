@@ -2,16 +2,16 @@ using Microsoft.Playwright;
 
 namespace SimpleBehav;
 
-public interface IAssertion
-{
-    string Label { get; }
-    Task RunAsync(IPage page);
-}
-
 internal sealed class Assertion(string label, Func<IPage, Task> run) : IAssertion
 {
     public string Label { get; } = label;
-    public Task RunAsync(IPage page) => run(page);
+
+    public Task RunAsync(ISetupContext context)
+    {
+        if (context is not SetupContext playwright)
+            throw new InvalidOperationException($"See assertions require a Playwright SetupContext, got {context.GetType().Name}");
+        return run(playwright.Page);
+    }
 }
 
 /// <summary>Fluent assertion builders — the review surface for a scenario.</summary>

@@ -20,7 +20,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SimpleBehav\SimpleBehav.csproj" />
+    <ProjectReference Include="..\..\..\DSL\dotnet\SimpleBehav\SimpleBehav.csproj" />
+    <ProjectReference Include="..\SimpleBehav.Playwright\SimpleBehav.Playwright.csproj" />
   </ItemGroup>
 
 </Project>
