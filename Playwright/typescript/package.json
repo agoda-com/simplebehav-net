@@ -1,0 +1,27 @@
+{
+  "name": "simplebehav-playwright",
+  "version": "0.1.0",
+  "description": "Playwright adapter for SimpleBehav — browser builder, route setups, and See assertions.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test:browser": "tsx --test test/**/*.browser.test.ts"
+  },
+  "dependencies": {
+    "playwright": "1.49.0",
+    "simplebehav": "file:../../DSL/typescript"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

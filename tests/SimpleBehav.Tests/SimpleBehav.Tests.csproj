@@ -21,8 +21,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\SimpleBehav.NUnit\SimpleBehav.NUnit.csproj" />
-    <ProjectReference Include="..\..\src\SimpleBehav.SpecGen\SimpleBehav.SpecGen.csproj" />
+    <ProjectReference Include="..\..\Playwright\dotnet\SimpleBehav.NUnit\SimpleBehav.NUnit.csproj" />
+    <ProjectReference Include="..\..\Playwright\dotnet\SimpleBehav.Playwright\SimpleBehav.Playwright.csproj" />
+    <ProjectReference Include="..\..\LivingDoc\dotnet\SimpleBehav.SpecGen\SimpleBehav.SpecGen.csproj" />
   </ItemGroup>
 
 </Project>

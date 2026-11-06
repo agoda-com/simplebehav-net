@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>SimpleBehav</RootNamespace>
+    <PackageId>SimpleBehav.Playwright</PackageId>
+    <Description>Playwright adapter for SimpleBehav — browser builder, route setups, and See assertions.</Description>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\DSL\dotnet\SimpleBehav\SimpleBehav.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Peer dependencies. PrivateAssets keeps them out of the nuspec so a consumer pin cannot downgrade against this package. -->
+    <PackageReference Include="Microsoft.Playwright" Version="1.63.0">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

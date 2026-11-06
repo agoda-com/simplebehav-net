@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.2" />
-    <ProjectReference Include="..\SimpleBehav\SimpleBehav.csproj" />
+    <ProjectReference Include="..\..\..\DSL\dotnet\SimpleBehav\SimpleBehav.csproj" />
   </ItemGroup>
 
 </Project>

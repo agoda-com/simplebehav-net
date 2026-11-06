@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using Microsoft.Playwright;
 using SimpleBehav.Reporter;
 
 namespace SimpleBehav;
@@ -44,6 +43,24 @@ public interface ISystemUnderTestBuilder
 
     /// <summary>Called once per test class — teardown.</summary>
     Task DisposeAsync();
+}
+
+/// <summary>
+/// Optional adapter capability. Playwright starts a trace around the scenario and
+/// copies the trace viewer next to the artifacts. Adapters without a browser ignore it.
+/// </summary>
+public interface IScenarioTrace
+{
+    Task StartTraceAsync();
+    Task StopTraceAsync(string tracePath);
+    void EnsureViewer(string artifactsRoot);
+}
+
+/// <summary>A Then-step. The adapter's context is passed through; the assertion knows how to read it.</summary>
+public interface IAssertion
+{
+    string Label { get; }
+    Task RunAsync(ISetupContext context);
 }
 
 // ─── Pre-built setup ──────────────────────────────────────────────────────────
@@ -99,9 +116,8 @@ internal sealed class ScenarioRunner
         string? failureMessage = null;
         var ctx = _adapter.CreateContext();
 
-        // Start trace before any interaction
-        if (_adapter is PlaywrightBuilder pw)
-            await pw.StartTraceAsync();
+        if (_adapter is IScenarioTrace trace)
+            await trace.StartTraceAsync();
 
         try
         {
@@ -125,12 +141,11 @@ internal sealed class ScenarioRunner
         var bundle = emitter.Build(status);
         var dir = await emitter.EmitAsync(bundle, _outDir, _suitePath);
 
-        // Stop trace and write the zip next to the scenario's bundle
         var tracePath = Path.Combine(dir, "trace.zip");
-        if (_adapter is PlaywrightBuilder pwStop)
+        if (_adapter is IScenarioTrace traceStop)
         {
-            await pwStop.StopTraceAsync(tracePath);
-            PlaywrightBuilder.EnsureTraceViewer(_outDir);
+            await traceStop.StopTraceAsync(tracePath);
+            traceStop.EnsureViewer(_outDir);
         }
 
         // The viewer lives at the artifacts root, the suite page one level per path segment below it
@@ -171,11 +186,10 @@ internal sealed class ScenarioRunner
 
     private async Task RunThenAsync(ISetupContext ctx, IReadOnlyList<(string Label, IAssertion Assertion)> assertions, ArtifactEmitter emitter)
     {
-        var page = TryGetPage(ctx);
         foreach (var (label, assertion) in assertions)
         {
             var t = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            await assertion.RunAsync(page!);
+            await assertion.RunAsync(ctx);
             emitter.AddStep(new ArtifactStep
             {
                 Type = StepType.Assert,
@@ -185,10 +199,6 @@ internal sealed class ScenarioRunner
         }
     }
 
-    private IPage? TryGetPage(ISetupContext ctx)
-    {
-        try { return _adapter.Construct<IPage>(ctx); } catch { return null; }
-    }
 }
 
 // ─── Token chain ──────────────────────────────────────────────────────────────
