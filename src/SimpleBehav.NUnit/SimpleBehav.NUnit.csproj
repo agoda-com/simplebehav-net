@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>SimpleBehav.NUnit</PackageId>
+    <Description>NUnit integration for SimpleBehav — [PlaywrightScenario] attribute and auto-variant naming.</Description>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Peer dependencies, same as SimpleBehav. NUnit 3.13 matches consumer test projects; NUnit 4 would force a major upgrade through the package. -->
+    <PackageReference Include="Microsoft.Playwright" Version="1.63.0">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="NUnit" Version="3.13.3">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleBehav\SimpleBehav.csproj" />
+  </ItemGroup>
+
+</Project>

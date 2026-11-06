@@ -1,0 +1,27 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    env:
+      SIMPLEBEHAV_HEADLESS: "true"
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet build --configuration Debug
+      - run: pwsh tests/SimpleBehav.Tests/bin/Debug/net8.0/playwright.ps1 install chromium --with-deps
+      - run: dotnet test --no-build --configuration Debug
+      - name: Pack
+        run: |
+          for p in SimpleBehav SimpleBehav.NUnit SimpleBehav.SpecGen; do
+            dotnet pack src/$p --configuration Release -p:Version=0.0.0-ci --output nupkgs
+          done

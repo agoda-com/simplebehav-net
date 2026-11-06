@@ -1,0 +1,186 @@
+<Project>
+
+  <!--
+    Copies bundled Agent Skills into the consuming repo's .agents/skills on build.
+    NuGet restore has no install hook, so this runs at PrepareForBuild.
+
+    A same-named skill already in the repo is left untouched. Replacing it makes the
+    agent follow the package text and ignore the repo's own skill (vercel-labs/skills#1906).
+    A copy this package installed is refreshed only while its content hash still matches
+    the stamp written at install time. An edit drops the stamp match, and the edit stays.
+
+    The installed SKILL.md carries the marker "simplebehav-skill-source: nuget:SimpleBehav"
+    so an agent can see that the file it loaded came from the package.
+    Opt out with EnableEmbeddedAgentSkills=false.
+  -->
+  <Target Name="InstallSimpleBehavAgentSkills"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(EnableEmbeddedAgentSkills)' != 'false' and '$(DesignTimeBuild)' != 'true'">
+
+    <Exec Command="git -C &quot;$(MSBuildProjectDirectory)&quot; rev-parse --show-toplevel"
+          ConsoleToMSBuild="true"
+          IgnoreExitCode="true"
+          EchoOff="true"
+          StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_SimpleBehavSkillGitRoot" />
+    </Exec>
+
+    <PropertyGroup>
+      <_SimpleBehavSkillRoot>$(_SimpleBehavSkillGitRoot)</_SimpleBehavSkillRoot>
+      <_SimpleBehavSkillRoot Condition="'$(_SimpleBehavSkillRoot)' == '' and '$(SolutionDir)' != '' and '$(SolutionDir)' != '*Undefined*'">$(SolutionDir)</_SimpleBehavSkillRoot>
+      <_SimpleBehavSkillRoot Condition="'$(_SimpleBehavSkillRoot)' == ''">$(MSBuildProjectDirectory)</_SimpleBehavSkillRoot>
+      <_SimpleBehavSkillRoot>$([MSBuild]::EnsureTrailingSlash('$(_SimpleBehavSkillRoot)'))</_SimpleBehavSkillRoot>
+      <_SimpleBehavSkillSource>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', 'contentFiles', 'any', 'any', 'skills'))</_SimpleBehavSkillSource>
+      <_SimpleBehavSkillGitIgnore>$(MSBuildThisFileDirectory)skill.gitignore</_SimpleBehavSkillGitIgnore>
+      <_SimpleBehavPackageVersion>$([System.IO.Path]::GetFileName($([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))))</_SimpleBehavPackageVersion>
+      <_SimpleBehavSkillStage>$([MSBuild]::EnsureTrailingSlash('$(BaseIntermediateOutputPath)simplebehav-skills'))</_SimpleBehavSkillStage>
+    </PropertyGroup>
+
+    <ItemGroup Condition="Exists('$(_SimpleBehavSkillSource)')">
+      <_SimpleBehavSkill Include="$(_SimpleBehavSkillSource)*\SKILL.md" />
+    </ItemGroup>
+    <!-- Identity is not available on the item while it is being created, so the folder name is set in a second pass. -->
+    <ItemGroup>
+      <_SimpleBehavSkill>
+        <SkillName>$([System.IO.Path]::GetFileName($([System.IO.Path]::GetDirectoryName('%(FullPath)'))))</SkillName>
+      </_SimpleBehavSkill>
+    </ItemGroup>
+
+    <MSBuild Projects="$(MSBuildThisFileFullPath)"
+             Targets="_InstallSimpleBehavOneSkill"
+             BuildInParallel="false"
+             Properties="SimpleBehavSkillName=%(_SimpleBehavSkill.SkillName);SimpleBehavSkillRoot=$(_SimpleBehavSkillRoot);SimpleBehavSkillSource=$(_SimpleBehavSkillSource);SimpleBehavSkillGitIgnore=$(_SimpleBehavSkillGitIgnore);SimpleBehavPackageVersion=$(_SimpleBehavPackageVersion);SimpleBehavSkillStage=$(_SimpleBehavSkillStage)"
+             Condition="'@(_SimpleBehavSkill)' != ''" />
+  </Target>
+
+  <Target Name="_InstallSimpleBehavOneSkill">
+    <PropertyGroup>
+      <_SrcDir>$([MSBuild]::EnsureTrailingSlash('$(SimpleBehavSkillSource)$(SimpleBehavSkillName)'))</_SrcDir>
+      <_DestDir>$([MSBuild]::EnsureTrailingSlash('$(SimpleBehavSkillRoot).agents/skills/$(SimpleBehavSkillName)'))</_DestDir>
+      <_StageDir>$([MSBuild]::EnsureTrailingSlash('$(SimpleBehavSkillStage)$(SimpleBehavSkillName)'))</_StageDir>
+      <_DestSkill>$(_DestDir)SKILL.md</_DestSkill>
+      <_StageSkill>$(_StageDir)SKILL.md</_StageSkill>
+      <_HashPath>$(_DestDir).simplebehav-content.sha256</_HashPath>
+      <_Action>skip</_Action>
+      <_Action Condition="'$(SimpleBehavSkillName)' != '' and !Exists('$(_DestSkill)')">install</_Action>
+      <_Action Condition="'$(SimpleBehavSkillName)' != '' and Exists('$(_DestSkill)')">inspect</_Action>
+    </PropertyGroup>
+
+    <ReadLinesFromFile File="$(_DestSkill)" Condition="'$(_Action)' == 'inspect'">
+      <Output TaskParameter="Lines" ItemName="_ExistingSkillLine" />
+    </ReadLinesFromFile>
+    <ItemGroup Condition="'$(_Action)' == 'inspect'">
+      <_OwnedMarker Include="@(_ExistingSkillLine)"
+                    Condition="$([System.String]::Copy('%(Identity)').Contains('simplebehav-skill-source: nuget:SimpleBehav'))" />
+    </ItemGroup>
+    <PropertyGroup Condition="'$(_Action)' == 'inspect'">
+      <_Action Condition="'@(_OwnedMarker)' == ''">keep-local</_Action>
+      <_Action Condition="'@(_OwnedMarker)' != ''">compare</_Action>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(SimpleBehavSkillStage)" Condition="'$(_Action)' == 'keep-local'" />
+    <ReadLinesFromFile File="$(SimpleBehavSkillStage)notices.txt"
+                       Condition="'$(_Action)' == 'keep-local' and Exists('$(SimpleBehavSkillStage)notices.txt')">
+      <Output TaskParameter="Lines" ItemName="_NoticeLine" />
+    </ReadLinesFromFile>
+    <ItemGroup Condition="'$(_Action)' == 'keep-local'">
+      <_NoticeHit Include="@(_NoticeLine)" Condition="'%(Identity)' == 'keep-local $(SimpleBehavSkillName)'" />
+    </ItemGroup>
+    <Message Importance="high"
+             Condition="'$(_Action)' == 'keep-local' and '@(_NoticeHit)' == ''"
+             Text="SimpleBehav: kept local agent skill '$(SimpleBehavSkillName)' at $(_DestDir). The package copy was not installed." />
+    <WriteLinesToFile File="$(SimpleBehavSkillStage)notices.txt"
+                      Lines="keep-local $(SimpleBehavSkillName)"
+                      Overwrite="false"
+                      Condition="'$(_Action)' == 'keep-local' and '@(_NoticeHit)' == ''" />
+
+    <!-- Stage the package skill plus the marker the agent reads. Hash that tree. -->
+    <RemoveDir Directories="$(_StageDir)" Condition="'$(_Action)' == 'install' or '$(_Action)' == 'compare'" />
+    <ItemGroup Condition="'$(_Action)' == 'install' or '$(_Action)' == 'compare'">
+      <_PackageSkillFile Include="$(_SrcDir)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_PackageSkillFile)"
+          DestinationFiles="@(_PackageSkillFile->'$(_StageDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="false"
+          Condition="'$(_Action)' == 'install' or '$(_Action)' == 'compare'" />
+    <ReadLinesFromFile File="$(_StageSkill)" Condition="'$(_Action)' == 'install' or '$(_Action)' == 'compare'">
+      <Output TaskParameter="Lines" ItemName="_StagedSkillLine" />
+    </ReadLinesFromFile>
+    <ItemGroup Condition="'$(_Action)' == 'install' or '$(_Action)' == 'compare'">
+      <_StagedSkillLine Include="&lt;!-- simplebehav-skill-source: nuget:SimpleBehav $(SimpleBehavPackageVersion) --&gt;" />
+      <_StagedSkillLine Include="This copy was installed from NuGet package SimpleBehav $(SimpleBehavPackageVersion). Follow a SKILL.md already in the repo at .agents/skills/$(SimpleBehavSkillName)/ over this file. This package does not replace that folder, and it does not replace this file after it has been edited." />
+    </ItemGroup>
+    <WriteLinesToFile File="$(_StageSkill)"
+                      Lines="@(_StagedSkillLine)"
+                      Overwrite="true"
+                      Condition="'$(_Action)' == 'install' or '$(_Action)' == 'compare'" />
+
+    <ItemGroup Condition="'$(_Action)' == 'install' or '$(_Action)' == 'compare'">
+      <_StagedContent Include="$(_StageDir)**\*" />
+    </ItemGroup>
+    <GetFileHash Files="@(_StagedContent)" Algorithm="SHA256" Condition="'$(_Action)' == 'install' or '$(_Action)' == 'compare'">
+      <Output TaskParameter="Items" ItemName="_StagedHashed" />
+    </GetFileHash>
+    <PropertyGroup Condition="'$(_Action)' == 'install' or '$(_Action)' == 'compare'">
+      <_PackageFingerprint>@(_StagedHashed->'%(RecursiveDir)%(Filename)%(Extension)=%(FileHash)', '|')</_PackageFingerprint>
+    </PropertyGroup>
+
+    <ItemGroup Condition="'$(_Action)' == 'compare'">
+      <_InstalledContent Include="$(_DestDir)**\*"
+                         Exclude="$(_DestDir).gitignore;$(_DestDir).simplebehav-content.sha256" />
+    </ItemGroup>
+    <GetFileHash Files="@(_InstalledContent)" Algorithm="SHA256" Condition="'$(_Action)' == 'compare' and '@(_InstalledContent)' != ''">
+      <Output TaskParameter="Items" ItemName="_InstalledHashed" />
+    </GetFileHash>
+    <ReadLinesFromFile File="$(_HashPath)" Condition="'$(_Action)' == 'compare' and Exists('$(_HashPath)')">
+      <Output TaskParameter="Lines" ItemName="_StoredFingerprint" />
+    </ReadLinesFromFile>
+    <PropertyGroup Condition="'$(_Action)' == 'compare'">
+      <_InstalledFingerprint>@(_InstalledHashed->'%(RecursiveDir)%(Filename)%(Extension)=%(FileHash)', '|')</_InstalledFingerprint>
+      <_StoredFingerprintText>@(_StoredFingerprint)</_StoredFingerprintText>
+      <_Action Condition="'$(_StoredFingerprintText)' == '' or '$(_StoredFingerprintText)' != '$(_InstalledFingerprint)'">keep-edit</_Action>
+      <_Action Condition="'$(_StoredFingerprintText)' == '$(_InstalledFingerprint)' and '$(_InstalledFingerprint)' == '$(_PackageFingerprint)'">up-to-date</_Action>
+      <_Action Condition="'$(_StoredFingerprintText)' == '$(_InstalledFingerprint)' and '$(_InstalledFingerprint)' != '$(_PackageFingerprint)'">update</_Action>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(SimpleBehavSkillStage)" Condition="'$(_Action)' == 'keep-edit'" />
+    <ReadLinesFromFile File="$(SimpleBehavSkillStage)notices.txt"
+                       Condition="'$(_Action)' == 'keep-edit' and Exists('$(SimpleBehavSkillStage)notices.txt')">
+      <Output TaskParameter="Lines" ItemName="_EditNoticeLine" />
+    </ReadLinesFromFile>
+    <ItemGroup Condition="'$(_Action)' == 'keep-edit'">
+      <_EditNoticeHit Include="@(_EditNoticeLine)" Condition="'%(Identity)' == 'keep-edit $(SimpleBehavSkillName)'" />
+    </ItemGroup>
+    <Message Importance="high"
+             Condition="'$(_Action)' == 'keep-edit' and '@(_EditNoticeHit)' == ''"
+             Text="SimpleBehav: kept edits to agent skill '$(SimpleBehavSkillName)' at $(_DestDir). The package copy was not installed." />
+    <WriteLinesToFile File="$(SimpleBehavSkillStage)notices.txt"
+                      Lines="keep-edit $(SimpleBehavSkillName)"
+                      Overwrite="false"
+                      Condition="'$(_Action)' == 'keep-edit' and '@(_EditNoticeHit)' == ''" />
+
+    <ItemGroup Condition="'$(_Action)' == 'install' or '$(_Action)' == 'update'">
+      <_StagedContent Include="$(_StageDir)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_StagedContent)"
+          DestinationFiles="@(_StagedContent->'$(_DestDir)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="false"
+          Condition="'$(_Action)' == 'install' or '$(_Action)' == 'update'" />
+    <Copy SourceFiles="$(SimpleBehavSkillGitIgnore)"
+          DestinationFiles="$(_DestDir).gitignore"
+          SkipUnchangedFiles="true"
+          Condition="('$(_Action)' == 'install' or '$(_Action)' == 'update') and Exists('$(SimpleBehavSkillGitIgnore)')" />
+    <WriteLinesToFile File="$(_HashPath)"
+                      Lines="$(_PackageFingerprint)"
+                      Overwrite="true"
+                      Condition="'$(_Action)' == 'install' or '$(_Action)' == 'update'" />
+
+    <Message Importance="high"
+             Condition="'$(_Action)' == 'install'"
+             Text="SimpleBehav: installed agent skill '$(SimpleBehavSkillName)' from nuget:SimpleBehav $(SimpleBehavPackageVersion) to $(_DestDir)" />
+    <Message Importance="high"
+             Condition="'$(_Action)' == 'update'"
+             Text="SimpleBehav: updated agent skill '$(SimpleBehavSkillName)' from nuget:SimpleBehav $(SimpleBehavPackageVersion) at $(_DestDir)" />
+  </Target>
+
+</Project>

@@ -1,0 +1,6 @@
+# Installed by the SimpleBehav package on build so coding agents can read the bundled skill.
+# Commit this file. The skill files beside it stay out of source control, so a package update does not dirty the diff.
+# To stop installing skills, set EnableEmbeddedAgentSkills to false in the project or Directory.Build.props.
+*
+!*/
+!.gitignore

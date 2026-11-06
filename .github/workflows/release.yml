@@ -1,0 +1,23 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: nuget
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Pack
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for p in SimpleBehav SimpleBehav.NUnit SimpleBehav.SpecGen; do
+            dotnet pack src/$p --configuration Release -p:ContinuousIntegrationBuild=true -p:Version="$version" --output nupkgs
+          done
+      - name: Push
+        run: dotnet nuget push "nupkgs/*.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
