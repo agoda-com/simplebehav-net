@@ -2,7 +2,7 @@
 
 [Documentation](../README.md#documentation)
 
-SimpleBehav is a thin DSL over NUnit and Playwright. It does not replace the test runner. A scenario compiles to a standard NUnit `[Test]` method.
+SimpleBehav is a thin DSL over a test runner and a system-under-test adapter. On .NET that runner is NUnit and the adapter is Playwright: a scenario compiles to a standard NUnit `[Test]` method. Kotlin scenarios run under JUnit 5, and TypeScript scenarios run under the Node test runner. All three write the same `bundle.json`, `cucumber.json`, and suite `index.html`.
 
 ## What the library includes
 
@@ -18,7 +18,7 @@ SimpleBehav is a thin DSL over NUnit and Playwright. It does not replace the tes
 - Migrating existing Reqnroll tests (incremental, and outside this design)
 - xUnit or MSTest integration (can be added later; NUnit is the current standard)
 - Replacing unit or integration tests — acceptance-layer only
-- BDD tooling for non-.NET stacks
+- Living documentation generated from Kotlin or TypeScript source (`simplebehav-gen` reads C#)
 
 ## Assumptions
 

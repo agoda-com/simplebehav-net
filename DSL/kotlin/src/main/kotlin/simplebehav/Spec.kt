@@ -117,6 +117,9 @@ internal class ScenarioRunner(
 
         val bundle = emitter.build(status)
         val dir = emitter.emit(bundle, outDir, suitePath)
+        val suiteDir = dir.parent ?: error("[simplebehav] scenario directory has no suite parent")
+        val traceViewerBase = "../".repeat(suitePath.size) + "trace-viewer/index.html"
+        SuiteReporter.write(suiteDir, suitePath.last(), traceViewerBase)
         trace?.stopTrace(dir.resolve("trace.zip"))
         trace?.ensureViewer(java.nio.file.Path.of(outDir))
 

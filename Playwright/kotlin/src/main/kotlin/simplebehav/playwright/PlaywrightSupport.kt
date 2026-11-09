@@ -92,10 +92,12 @@ class PlaywrightBuilder(private val page: Page) : SystemUnderTestBuilder, Scenar
         val url = Playwright::class.java.classLoader.getResource(resource)
             ?: error("Playwright Trace Viewer assets were not found at $resource")
         val connection = url.openConnection() as java.net.JarURLConnection
-        val filesystem = java.nio.file.FileSystems.newFileSystem(
-            java.net.URI.create("jar:${connection.jarFileURL}"),
-            emptyMap<String, Any>(),
-        )
+        val uri = java.net.URI.create("jar:${connection.jarFileURL}")
+        val filesystem = try {
+            java.nio.file.FileSystems.getFileSystem(uri)
+        } catch (_: java.nio.file.FileSystemNotFoundException) {
+            java.nio.file.FileSystems.newFileSystem(uri, emptyMap<String, Any>())
+        }
         return filesystem.getPath("driver", folder, "package", "lib", "vite", "traceViewer")
     }
 

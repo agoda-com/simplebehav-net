@@ -87,7 +87,7 @@ internal class ArtifactEmitter(private val title: String) {
         steps = steps.toList(),
     )
 
-    /** Writes bundle.json and cucumber.json. LivingDoc renders the suite page from these files. */
+    /** Writes bundle.json and cucumber.json. The runner then refreshes the suite index.html. */
     fun emit(bundle: ArtifactBundle, outDir: String, suitePath: List<String>): Path {
         val slug = ArtifactPaths.slug(bundle.title)
         val dir = suitePath.fold(Path.of(outDir)) { path, segment -> path.resolve(segment) }.resolve(slug)

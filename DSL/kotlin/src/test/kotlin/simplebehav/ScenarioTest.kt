@@ -29,10 +29,39 @@ class ScenarioTest {
             .run()
 
         assertEquals(listOf("catalog is stocked"), adapter.applied)
-        val wroteBundle = Files.walk(out).use { paths ->
-            paths.anyMatch { it.fileName.toString() == "bundle.json" }
+        val html = readSuitePage(out)
+        assertTrue(html.contains("AddsItem"))
+        assertTrue(html.contains("ALL PASSED"))
+        assertTrue(html.contains("Given catalog is stocked"))
+        assertTrue(html.contains("When user adds the item"))
+        assertTrue(html.contains("Then cart shows the item"))
+    }
+
+    @Test
+    fun failedScenarioStillWritesTheSuitePage() = runBlocking {
+        val out = Files.createTempDirectory("simplebehav")
+        Spec.configure(RecordingBuilder(), out.toString(), "sample")
+        Spec.testName = "RejectsItem"
+        Spec.testClass = ScenarioTest::class
+        Spec.configureScenario = null
+
+        val failure = kotlin.test.assertFailsWith<IllegalStateException> {
+            Spec.scenario()
+                .When<String>("user adds the item") { }
+                .then("cart shows the item", object : Assertion {
+                    override val label = "cart shows the item"
+                    override suspend fun run(context: SetupContext) {
+                        error("timeout")
+                    }
+                })
+                .run()
         }
-        assertTrue(wroteBundle)
+
+        assertTrue(failure.message!!.contains("RejectsItem"))
+        val html = readSuitePage(out)
+        assertTrue(html.contains("1 FAILED"))
+        assertTrue(html.contains("pre-error"))
+        assertTrue(html.contains("data-title=\"RejectsItem\" open"))
     }
 
     @Test
@@ -43,6 +72,13 @@ class ScenarioTest {
         assertTrue(mobile != desktop)
         assertTrue(mobile.length <= 80)
     }
+}
+
+private fun readSuitePage(root: java.nio.file.Path): String {
+    val index = Files.walk(root).use { paths ->
+        paths.filter { it.fileName.toString() == "index.html" }.findFirst().orElseThrow()
+    }
+    return Files.readString(index)
 }
 
 private class RecordingBuilder : SystemUnderTestBuilder {

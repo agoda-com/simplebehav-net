@@ -81,6 +81,8 @@ jobs:
           java-version: 17
       - name: Test
         run: ./gradlew test --no-daemon
+      - name: Browser test
+        run: ./gradlew :simplebehav-playwright:browserTest --no-daemon
 
   typescript:
     name: TypeScript
@@ -96,6 +98,9 @@ jobs:
       - name: Typecheck Playwright
         working-directory: Playwright/typescript
         run: npm install && npx tsc --noEmit
+      - name: Browser test
+        working-directory: Playwright/typescript
+        run: npx playwright install chromium && npm run test:browser
 
   deploy:
     needs: build

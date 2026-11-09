@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { writeSuiteReport } from "./suiteReport.js";
 
 export type StepType = "Setup" | "Act" | "Assert";
 
@@ -163,6 +164,9 @@ class ScenarioRunner {
 
     const bundle = emitter.build(status);
     const dir = await emitter.emit(bundle, this.outDir, this.suite);
+    const suiteDir = path.dirname(dir);
+    const traceViewerBase = `${"../".repeat(this.suite.length)}trace-viewer/index.html`;
+    await writeSuiteReport(suiteDir, this.suite[this.suite.length - 1] ?? "suite", traceViewerBase);
     await trace?.stopTrace(path.join(dir, "trace.zip"));
     await trace?.ensureViewer(this.outDir);
     if (status === "fail") throw new Error(`[simplebehav] "${this.scenarioName}" failed: ${failureMessage}`);
