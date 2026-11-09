@@ -13,7 +13,7 @@ internal sealed class GenerateDocCommand(string sourcePath, string outDir) : ICo
         Directory.CreateDirectory(outDir);
 
         var source = await File.ReadAllTextAsync(sourcePath);
-        var scenarios = SpecParser.ParseTestSource(source);
+        var scenarios = SpecParser.ParseFile(sourcePath, source);
         var featureName = Path.GetFileNameWithoutExtension(sourcePath)
             .Replace("Tests", "");
 

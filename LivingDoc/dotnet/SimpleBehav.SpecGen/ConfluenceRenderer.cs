@@ -81,7 +81,7 @@ public static class ConfluenceRenderer
         var sb = new StringBuilder();
         sb.Append(Nav(titles, o, ReportsLink(o, feature, "Run report & traces")));
         sb.Append(GeneratedNotice());
-        sb.Append($"<p>{feature.Scenarios.Count} scenario{(feature.Scenarios.Count != 1 ? "s" : "")} · <code>{Esc(feature.PagePath)}.cs</code></p>");
+        sb.Append($"<p>{feature.Scenarios.Count} scenario{(feature.Scenarios.Count != 1 ? "s" : "")} · <code>{Esc(feature.PagePath + feature.SourceExtension)}</code></p>");
         sb.Append(Macro("toc"));
 
         foreach (var scenario in feature.Scenarios)

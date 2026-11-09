@@ -18,7 +18,6 @@ SimpleBehav is a thin DSL over a test runner and a system-under-test adapter. On
 - Migrating existing Reqnroll tests (incremental, and outside this design)
 - xUnit or MSTest integration (can be added later; NUnit is the current standard)
 - Replacing unit or integration tests — acceptance-layer only
-- Living documentation generated from Kotlin or TypeScript source (`simplebehav-gen` reads C#)
 
 ## Assumptions
 

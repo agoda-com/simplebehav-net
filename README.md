@@ -23,9 +23,9 @@ product writes a prompt ─▶ agent writes the scenario ─▶ CI runs it ─�
 | Visual "what changed" — step-level and screenshot diff, MR comment | 🔜 next |
 | Prompt → scenario via an MCP engine for Claude, extending missing building blocks on request | 🔜 planned |
 | Kotlin and TypeScript implementations emitting the same artifact formats (`bundle.json`, `cucumber.json`, suite `index.html`) | ✅ shipped |
-| Living documentation generated from Kotlin or TypeScript source | 🔜 planned |
+| Living documentation generated from Kotlin and TypeScript source | ✅ shipped |
 
-The Given / When / Then chain is the same in each language. Each language keeps its own build root: `SimpleBehav.sln` for C#, `kotlin/` for Kotlin (the DSL, the Playwright adapter, and a Ktor host adapter), and `package.json` projects under `DSL/typescript` and `Playwright/typescript`. `simplebehav-gen` still reads C# scenarios.
+The Given / When / Then chain is the same in each language. Each language keeps its own build root: `SimpleBehav.sln` for C#, `kotlin/` for Kotlin (the DSL, the Playwright adapter, and a Ktor host adapter), and `package.json` projects under `DSL/typescript` and `Playwright/typescript`. `simplebehav-gen --livingdoc` reads `.cs`, `.kt`, and `.ts` test files.
 
 Why this suits agents: no step-binding layer to get wrong, about half the tokens per scenario of
 Gherkin ([comparison](docs/comparison.md)), and the C# compiler validates the structure
@@ -115,8 +115,9 @@ site rather than sending trace data to an external service.
 
 ### Living documentation
 
-`simplebehav-gen` turns the test source into a documentation site. The spec itself needs no test run,
-so it is always current; add the run's artifacts and every scenario also shows its result:
+`simplebehav-gen` turns the test source into a documentation site. Point it at a directory of C#,
+Kotlin, or TypeScript tests. The same Given / When / Then chain is read from each. The spec itself
+needs no test run, so it is always current; add the run's artifacts and every scenario also shows its result:
 
 ```
 simplebehav-gen --livingdoc tests/MyApp.Tests --out livingdoc \

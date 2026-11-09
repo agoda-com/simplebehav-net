@@ -5,7 +5,7 @@ internal static class CommandLine
     public static void PrintUsage()
     {
         Console.Error.WriteLine("Usage:");
-        Console.Error.WriteLine("  simplebehav-gen <TestClass.cs> --out <dir>          # test source → markdown doc");
+        Console.Error.WriteLine("  simplebehav-gen <TestFile.cs|.kt|.ts> --out <dir>   # test source → markdown doc");
         Console.Error.WriteLine("  simplebehav-gen --from-spec <spec.md> --out <dir>   # structured spec md → stubs");
         Console.Error.WriteLine("  simplebehav-gen --livingdoc <testsDir> --out <dir> [--reports <relPath>]");
         Console.Error.WriteLine("                          [--results <artifactsDir>] [--baseline <suite.json>]");

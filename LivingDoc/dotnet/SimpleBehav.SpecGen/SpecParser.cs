@@ -20,6 +20,24 @@ public record Scenario(
 public static class SpecParser
 {
     /// <summary>
+    /// Parses a test file. <c>.kt</c> and <c>.ts</c>/<c>.tsx</c> use the polyglot scanner;
+    /// everything else is C# via Roslyn.
+    /// </summary>
+    public static IReadOnlyList<Scenario> ParseFile(string path, string source) =>
+        Path.GetExtension(path).ToLowerInvariant() switch
+        {
+            ".kt" => ParseKotlin(source),
+            ".ts" or ".tsx" => ParseTypeScript(source),
+            _ => ParseTestSource(source),
+        };
+
+    /// <summary>Kotlin JUnit tests: <c>@Test fun</c> and <c>.given/.When/.then</c> chains.</summary>
+    public static IReadOnlyList<Scenario> ParseKotlin(string source) => PolyglotParser.ParseKotlin(source);
+
+    /// <summary>TypeScript <c>node:test</c> tests: <c>test("title", ...)</c> and <c>.given/.when/.then</c> chains.</summary>
+    public static IReadOnlyList<Scenario> ParseTypeScript(string source) => PolyglotParser.ParseTypeScript(source);
+
+    /// <summary>
     /// Mode 1: parse SimpleBehav test source (.cs) via Roslyn → scenarios.
     /// Reads .Given/.When/.Then/.And chain labels from each [Test] method.
     /// </summary>

@@ -4,7 +4,11 @@ using System.Text;
 namespace SimpleBehav.SpecGen;
 
 /// <summary>One test file and the scenarios parsed from it.</summary>
-public sealed record Feature(string Name, string RelativeDir, IReadOnlyList<Scenario> Scenarios)
+public sealed record Feature(
+    string Name,
+    string RelativeDir,
+    IReadOnlyList<Scenario> Scenarios,
+    string SourceExtension = ".cs")
 {
     /// <summary>Site-relative directory of this feature's page, mirroring the test source layout.</summary>
     public string PagePath => RelativeDir.Length == 0 ? Name : $"{RelativeDir}/{Name}";
@@ -12,7 +16,7 @@ public sealed record Feature(string Name, string RelativeDir, IReadOnlyList<Scen
 
 /// <summary>
 /// Emits the living documentation site: one HTML page per test file plus an index,
-/// derived purely from test source (Roslyn) — no test run needed.
+/// derived from C#, Kotlin, and TypeScript test source — no test run needed.
 /// </summary>
 public static class LivingDocEmitter
 {
@@ -23,20 +27,37 @@ public static class LivingDocEmitter
     public static async Task<IReadOnlyList<Feature>> LoadFeaturesAsync(string testsDir)
     {
         var features = new List<Feature>();
-        foreach (var file in Directory.EnumerateFiles(testsDir, "*.cs", SearchOption.AllDirectories).Order())
+        foreach (var file in ScenarioFiles(testsDir))
         {
             var relative = Path.GetRelativePath(testsDir, file).Replace('\\', '/');
-            if (relative.Split('/').Any(p => p is "bin" or "obj")) continue;
-
-            var scenarios = SpecParser.ParseTestSource(await File.ReadAllTextAsync(file))
+            var scenarios = SpecParser.ParseFile(file, await File.ReadAllTextAsync(file))
                 .Where(s => s.Steps.Count > 0).ToList();
             if (scenarios.Count == 0) continue;
 
             var dir = Path.GetDirectoryName(relative)?.Replace('\\', '/') ?? "";
-            features.Add(new Feature(Path.GetFileNameWithoutExtension(file), dir, scenarios));
+            features.Add(new Feature(
+                Path.GetFileNameWithoutExtension(file),
+                dir,
+                scenarios,
+                Path.GetExtension(file)));
         }
         return features;
     }
+
+    private static IEnumerable<string> ScenarioFiles(string testsDir)
+    {
+        string[] patterns = ["*.cs", "*.kt", "*.ts", "*.tsx"];
+        return patterns
+            .SelectMany(pattern => Directory.EnumerateFiles(testsDir, pattern, SearchOption.AllDirectories))
+            .Where(file => !file.EndsWith(".d.ts", StringComparison.OrdinalIgnoreCase))
+            .Select(file => (File: file, Relative: Path.GetRelativePath(testsDir, file).Replace('\\', '/')))
+            .Where(file => !IsGeneratedOutput(file.Relative))
+            .OrderBy(file => file.Relative, StringComparer.Ordinal)
+            .Select(file => file.File);
+    }
+
+    private static bool IsGeneratedOutput(string relative) =>
+        relative.Split('/').Any(part => part is "bin" or "obj" or "node_modules" or "dist" or "build" or ".gradle" or ".kotlin");
 
     /// <param name="reportsBase">
     /// Relative path from the site root to the test run reports (<c>&lt;reportsBase&gt;/&lt;folders&gt;/&lt;TestFile&gt;/</c>),
@@ -86,7 +107,7 @@ public static class LivingDocEmitter
         sb.AppendLine(Breadcrumbs(crumbs));
         sb.AppendLine($"<h1>{Esc(Humanize(feature.Name.Replace("Tests", "")))}</h1>");
         sb.AppendLine($"<p class=\"subtitle\">{feature.Scenarios.Count} scenario{(feature.Scenarios.Count != 1 ? "s" : "")}" +
-                      $" &middot; <code>{Esc(feature.PagePath)}.cs</code>" +
+                      $" &middot; <code>{Esc(feature.PagePath + feature.SourceExtension)}</code>" +
                       (reportHref is null ? "" : $" &middot; <a href=\"{Esc(reportHref)}\">Run report &amp; traces</a>") +
                       "</p>");
 
