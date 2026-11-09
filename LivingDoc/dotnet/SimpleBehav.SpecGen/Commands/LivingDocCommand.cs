@@ -61,7 +61,7 @@ internal sealed class LivingDocCommand(
             else diff = SuiteDiff.Compute(previous, manifest);
         }
 
-        await LivingDocEmitter.EmitAsync(features, outDir, reports, manifest, diff);
+        await LivingDocEmitter.EmitAsync(features, outDir, reports, manifest, diff, runResults);
         Console.WriteLine($"Generated living doc for {features.Count} features / {manifest.Summary.Scenarios} scenarios in {outDir}" +
             (diff is null ? "" : $" ({diff.Changes.Count} changes vs baseline)"));
 

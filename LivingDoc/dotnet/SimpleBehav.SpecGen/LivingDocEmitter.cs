@@ -61,12 +61,14 @@ public static class LivingDocEmitter
 
     /// <param name="reportsBase">
     /// Relative path from the site root to the test run reports (<c>&lt;reportsBase&gt;/&lt;folders&gt;/&lt;TestFile&gt;/</c>),
-    /// or null to omit "run report" links.
+    /// or null when there is no run to attach.
     /// </param>
     /// <param name="manifest">Scenarios with their results; written to suite.json.</param>
     /// <param name="diff">Changes against a baseline suite.json, or null when there is no baseline.</param>
+    /// <param name="runs">Executed bundles, used to point each scenario at its trace.</param>
     public static async Task EmitAsync(
-        IReadOnlyList<Feature> features, string outDir, string? reportsBase, SuiteManifest manifest, SuiteDiff? diff)
+        IReadOnlyList<Feature> features, string outDir, string? reportsBase, SuiteManifest manifest, SuiteDiff? diff,
+        IReadOnlyDictionary<string, List<RunResult>>? runs = null)
     {
         var byId = manifest.Features.SelectMany(f => f.Scenarios).ToDictionary(s => s.Id);
 
@@ -77,14 +79,13 @@ public static class LivingDocEmitter
             Directory.CreateDirectory(dir);
             var depth = feature.PagePath.Count(c => c == '/') + 1;
             var up = string.Concat(Enumerable.Repeat("../", depth));
-            var reportHref = reportsBase is null ? null : $"{up}{reportsBase.Trim('/')}/{feature.PagePath}/";
-            var nav = new Nav(up, reportsBase is null ? null : $"{up}{reportsBase.Trim('/')}/");
             await File.WriteAllTextAsync(Path.Combine(dir, "index.html"),
-                FeaturePage(feature, nav, reportHref, byId, i > 0 ? features[i - 1] : null, i < features.Count - 1 ? features[i + 1] : null));
+                ViewerPage(feature.Name, feature, [feature], byId, runs, reportsBase, up, new Nav(up, null)));
         }
 
         Directory.CreateDirectory(outDir);
-        await File.WriteAllTextAsync(Path.Combine(outDir, "index.html"), IndexPage(features, manifest, diff, byId, new Nav("", reportsBase is null ? null : $"{reportsBase.Trim('/')}/")));
+        await File.WriteAllTextAsync(Path.Combine(outDir, "index.html"),
+            ViewerPage("Scenarios", null, features, byId, runs, reportsBase, "", new Nav("", null), manifest, diff));
         // Separate page — does not alter feature pages or suite.json schema.
         await File.WriteAllTextAsync(Path.Combine(outDir, GraphEmitter.FileName), GraphEmitter.Emit(features, reportsBase));
         await File.WriteAllTextAsync(Path.Combine(outDir, "suite.json"),
@@ -96,87 +97,197 @@ public static class LivingDocEmitter
 
     internal static string Esc(string s) => WebUtility.HtmlEncode(s);
 
-    private static string FeaturePage(
-        Feature feature, Nav nav, string? reportHref, IReadOnlyDictionary<string, ScenarioManifest> byId,
-        Feature? prev, Feature? next)
+    /// <summary>
+    /// One screen: the scenario list, the Given / When / Then spec, and the trace.
+    /// Clicking a scenario switches the spec and the trace in place.
+    /// </summary>
+    private static string ViewerPage(
+        string title,
+        Feature? single,
+        IReadOnlyList<Feature> features,
+        IReadOnlyDictionary<string, ScenarioManifest> byId,
+        IReadOnlyDictionary<string, List<RunResult>>? runs,
+        string? reportsBase,
+        string up,
+        Nav nav,
+        SuiteManifest? manifest = null,
+        SuiteDiff? diff = null)
     {
         var sb = new StringBuilder();
-        var crumbs = new List<(string Label, string? Href)> { ("Features", nav.Root + "index.html") };
-        if (feature.RelativeDir.Length > 0) crumbs.Add((feature.RelativeDir, nav.Root + "index.html#" + GroupAnchor(feature.RelativeDir)));
-        crumbs.Add((Humanize(feature.Name.Replace("Tests", "")), null));
-        sb.AppendLine(Breadcrumbs(crumbs));
-        sb.AppendLine($"<h1>{Esc(Humanize(feature.Name.Replace("Tests", "")))}</h1>");
-        sb.AppendLine($"<p class=\"subtitle\">{feature.Scenarios.Count} scenario{(feature.Scenarios.Count != 1 ? "s" : "")}" +
-                      $" &middot; <code>{Esc(feature.PagePath + feature.SourceExtension)}</code>" +
-                      (reportHref is null ? "" : $" &middot; <a href=\"{Esc(reportHref)}\">Run report &amp; traces</a>") +
-                      "</p>");
-
-        foreach (var scenario in feature.Scenarios)
+        if (manifest is not null)
         {
-            var result = byId[$"{feature.PagePath}/{scenario.MethodName}"];
-            sb.AppendLine($"<section class=\"scenario {Tone(result.Status)}\" id=\"{Esc(scenario.MethodName)}\">");
-            sb.Append($"<h2><a class=\"anchor\" href=\"#{Esc(scenario.MethodName)}\">{Esc(Humanize(scenario.MethodName))}</a> {StatusPill(result)}");
-            if (scenario.IsProvesBug) sb.Append(" <span class=\"pill warn\">proves bug</span>");
-            sb.AppendLine("</h2>");
-
-            sb.AppendLine("<ol class=\"steps\">");
-            foreach (var step in scenario.Steps)
-                sb.AppendLine($"<li><span class=\"kw {Esc(step.Type.ToLowerInvariant())}\">{Esc(step.Type)}</span> {StepLabel(step.Label)}</li>");
-            sb.AppendLine("</ol>");
-
-            if (result.Error is not null)
-                sb.AppendLine($"<pre class=\"error\">{Esc(result.Error)}</pre>");
-
-            if (scenario.Cases is { Count: > 0 })
-                sb.AppendLine($"<p class=\"cases\">Cases: {string.Join(" ", scenario.Cases.Select(c => $"<code>{Esc(c)}</code>"))}</p>");
-
-            if (scenario.IsProvesBug)
-                sb.AppendLine("<p class=\"note\">Asserts broken behaviour; turns red when the fix ships.</p>");
-            sb.AppendLine("</section>");
+            var sum = manifest.Summary;
+            var hasResults = sum.Passed + sum.Failed > 0;
+            sb.AppendLine($"<p class=\"subtitle\">{manifest.Features.Count} feature{(manifest.Features.Count != 1 ? "s" : "")} &middot; {sum.Scenarios} scenario{(sum.Scenarios != 1 ? "s" : "")}" +
+                          (hasResults
+                              ? $" &middot; <span class=\"pill ok\">{sum.Passed} passed</span>" +
+                                (sum.Failed > 0 ? $" <span class=\"pill bad\">{sum.Failed} failed</span>" : "") +
+                                (sum.NotRun > 0 ? $" <span class=\"pill muted\">{sum.NotRun} not run</span>" : "")
+                              : " &middot; generated from test source") +
+                          "</p>");
         }
-
-        sb.AppendLine("<nav class=\"pager\">");
-        sb.AppendLine(prev is null ? "<span></span>" : $"<a href=\"{nav.Root}{Esc(prev.PagePath)}/\">&larr; {Esc(Humanize(prev.Name.Replace("Tests", "")))}</a>");
-        sb.AppendLine(next is null ? "<span></span>" : $"<a href=\"{nav.Root}{Esc(next.PagePath)}/\">{Esc(Humanize(next.Name.Replace("Tests", "")))} &rarr;</a>");
-        sb.AppendLine("</nav>");
-        return Page(Humanize(feature.Name), sb.ToString(), nav, NavSection.Features);
-    }
-
-    private static string IndexPage(
-        IReadOnlyList<Feature> features, SuiteManifest manifest, SuiteDiff? diff,
-        IReadOnlyDictionary<string, ScenarioManifest> byId, Nav nav)
-    {
-        var sum = manifest.Summary;
-        var hasResults = sum.Passed + sum.Failed > 0;
-        var sb = new StringBuilder();
-        sb.AppendLine("<h1>Living documentation</h1>");
-        sb.AppendLine($"<p class=\"subtitle\">{features.Count} feature{(features.Count != 1 ? "s" : "")} &middot; {sum.Scenarios} scenario{(sum.Scenarios != 1 ? "s" : "")}" +
-                      (hasResults
-                          ? $" &middot; <span class=\"pill ok\">{sum.Passed} passed</span>" +
-                            (sum.Failed > 0 ? $" <span class=\"pill bad\">{sum.Failed} failed</span>" : "") +
-                            (sum.NotRun > 0 ? $" <span class=\"pill muted\">{sum.NotRun} not run</span>" : "")
-                          : " &middot; generated from test source") +
-                      "</p>");
+        else if (single is not null)
+        {
+            sb.AppendLine($"<p class=\"subtitle\"><code>{Esc(single.PagePath + single.SourceExtension)}</code></p>");
+        }
 
         if (diff is not null) sb.Append(DiffSection(diff));
 
-        foreach (var group in features.GroupBy(f => f.RelativeDir))
+        sb.AppendLine("<div class=\"screen\">");
+        sb.AppendLine("<nav class=\"list\" aria-label=\"Scenarios\">");
+        foreach (var feature in features)
         {
-            if (group.Key.Length > 0) sb.AppendLine($"<h2 class=\"group\" id=\"{GroupAnchor(group.Key)}\">{Esc(group.Key)}</h2>");
-            sb.AppendLine("<ul class=\"features\">");
-            foreach (var f in group)
-            {
-                sb.AppendLine($"<li><a href=\"{Esc(f.PagePath)}/\">{Esc(Humanize(f.Name.Replace("Tests", "")))}</a>" +
-                              (nav.Reports is null ? "" : $" <a class=\"aux\" href=\"{Esc(nav.Reports)}{Esc(f.PagePath)}/\">traces</a>"));
-                sb.AppendLine("<ul>");
-                foreach (var s in f.Scenarios)
-                    sb.AppendLine($"<li><a href=\"{Esc(f.PagePath)}/#{Esc(s.MethodName)}\">{Esc(Humanize(s.MethodName))}</a> {StatusPill(byId[$"{f.PagePath}/{s.MethodName}"])}</li>");
-                sb.AppendLine("</ul></li>");
-            }
-            sb.AppendLine("</ul>");
+            if (single is null && features.Count > 1)
+                sb.AppendLine($"<p class=\"group\">{Esc(Humanize(feature.Name.Replace("Tests", "")))}</p>");
+            foreach (var scenario in feature.Scenarios)
+                sb.AppendLine(Pick(feature, scenario, byId, runs, reportsBase, up, single is null));
         }
-        return Page("Living documentation", sb.ToString(), nav, NavSection.Features);
+        sb.AppendLine("</nav>");
+
+        sb.AppendLine("<div class=\"spec-pane\">");
+        foreach (var feature in features)
+        {
+            foreach (var scenario in feature.Scenarios)
+                sb.Append(SpecBlock(feature, scenario, byId[$"{feature.PagePath}/{scenario.MethodName}"], runs, single is null));
+        }
+        sb.AppendLine("</div>");
+
+        sb.AppendLine("<div class=\"trace-pane\">");
+        sb.AppendLine("<p id=\"trace-empty\" class=\"empty\">No trace for this scenario.</p>");
+        sb.AppendLine("<iframe id=\"trace-viewer\" title=\"Playwright trace\" hidden></iframe>");
+        sb.AppendLine("</div>");
+        sb.AppendLine("</div>");
+        sb.AppendLine(ViewerScript());
+        return Page(single is null ? "Scenarios" : Humanize(title.Replace("Tests", "")), sb.ToString(), nav);
     }
+
+    private static string Pick(
+        Feature feature, Scenario scenario, IReadOnlyDictionary<string, ScenarioManifest> byId,
+        IReadOnlyDictionary<string, List<RunResult>>? runs, string? reportsBase, string up, bool siteWide)
+    {
+        var result = byId[$"{feature.PagePath}/{scenario.MethodName}"];
+        var id = siteWide ? SpecDomId(feature, scenario) : scenario.MethodName;
+        var matches = MatchingRuns(runs, feature.PagePath, scenario.MethodName);
+        var trace = Preferred(matches);
+        var report = ReportHref(reportsBase, up, feature.PagePath);
+        var viewer = ViewerHref(reportsBase, up);
+        return $"<a class=\"pick\" href=\"#{Esc(id)}\" data-spec=\"{Esc(id)}\" data-status=\"{Esc(result.Status)}\"" +
+               $" data-slug=\"{Esc(trace?.Slug ?? "")}\"" +
+               (report is null ? "" : $" data-report=\"{Esc(report)}\"") +
+               (viewer is null ? "" : $" data-viewer=\"{Esc(viewer)}\"") +
+               $">{Esc(Humanize(scenario.MethodName))} {StatusPill(result)}</a>";
+    }
+
+    private static string SpecBlock(Feature feature, Scenario scenario, ScenarioManifest result, IReadOnlyDictionary<string, List<RunResult>>? runs, bool siteWide)
+    {
+        var id = siteWide ? SpecDomId(feature, scenario) : scenario.MethodName;
+        var sb = new StringBuilder();
+        sb.AppendLine($"<section class=\"spec\" id=\"{Esc(id)}\">");
+        sb.Append($"<h2>{Esc(Humanize(scenario.MethodName))} {StatusPill(result)}");
+        if (scenario.IsProvesBug) sb.Append(" <span class=\"pill warn\">proves bug</span>");
+        sb.AppendLine("</h2>");
+        sb.AppendLine("<ol class=\"steps\">");
+        foreach (var step in scenario.Steps)
+            sb.AppendLine($"<li><span class=\"kw {Esc(step.Type.ToLowerInvariant())}\">{Esc(step.Type)}</span> {StepLabel(step.Label)}</li>");
+        sb.AppendLine("</ol>");
+        if (result.Error is not null)
+            sb.AppendLine($"<pre class=\"error\">{Esc(result.Error)}</pre>");
+        if (scenario.Cases is { Count: > 0 })
+            sb.AppendLine($"<p class=\"cases\">Cases: {string.Join(" ", scenario.Cases.Select(c => $"<code>{Esc(c)}</code>"))}</p>");
+
+        var matches = MatchingRuns(runs, feature.PagePath, scenario.MethodName);
+        if (matches.Count > 1)
+        {
+            sb.Append("<p class=\"cases\">");
+            foreach (var run in matches)
+            {
+                var label = run.Title.StartsWith(scenario.MethodName + "[", StringComparison.Ordinal) && run.Title.EndsWith(']')
+                    ? run.Title[(scenario.MethodName.Length + 1)..^1]
+                    : run.Title;
+                sb.Append($"<button type=\"button\" class=\"trace-variant\" data-slug=\"{Esc(run.Slug)}\">{Esc(label)}</button> ");
+            }
+            sb.AppendLine("</p>");
+        }
+
+        if (scenario.IsProvesBug)
+            sb.AppendLine("<p class=\"note\">Asserts broken behaviour; turns red when the fix ships.</p>");
+        sb.AppendLine("</section>");
+        return sb.ToString();
+    }
+
+    private static string SpecDomId(Feature feature, Scenario scenario) =>
+        feature.PagePath.Replace('/', '_') + "_" + scenario.MethodName;
+
+    private static List<RunResult> MatchingRuns(IReadOnlyDictionary<string, List<RunResult>>? runs, string pagePath, string method)
+    {
+        if (runs is null || !runs.TryGetValue(pagePath, out var list)) return [];
+        return list.Where(r => r.Title == method || r.Title.StartsWith(method + "[", StringComparison.Ordinal)).ToList();
+    }
+
+    private static RunResult? Preferred(IReadOnlyList<RunResult> matches) =>
+        matches.FirstOrDefault(r => r.Status != "pass") ?? matches.FirstOrDefault();
+
+    private static string? ReportHref(string? reportsBase, string up, string pagePath) =>
+        reportsBase is null ? null : $"{up}{reportsBase.Trim('/')}/{pagePath}/";
+
+    private static string? ViewerHref(string? reportsBase, string up)
+    {
+        if (reportsBase is null) return null;
+        var trimmed = reportsBase.Trim().Replace('\\', '/').Trim('/');
+        var slash = trimmed.LastIndexOf('/');
+        var parent = slash < 0 ? "." : trimmed[..slash];
+        return up + parent + "/trace-viewer/index.html";
+    }
+
+    private static string ViewerScript() => """
+        <script>
+        const picks = [...document.querySelectorAll(".pick")];
+        const specs = [...document.querySelectorAll(".spec")];
+        const frame = document.getElementById("trace-viewer");
+        const empty = document.getElementById("trace-empty");
+
+        function select(pick) {
+          if (!pick) return;
+          const id = pick.dataset.spec;
+          specs.forEach(spec => spec.classList.toggle("active", spec.id === id));
+          picks.forEach(item => item.classList.toggle("selected", item === pick));
+          const slug = pick.dataset.slug || "";
+          const report = pick.dataset.report || "";
+          const viewer = pick.dataset.viewer || "";
+          if (!slug || !report || !viewer) {
+            frame.hidden = true;
+            frame.removeAttribute("src");
+            empty.hidden = false;
+            return;
+          }
+          const trace = new URL(report + slug + "/trace.zip", window.location.href);
+          const view = new URL(viewer, window.location.href);
+          view.searchParams.set("trace", trace.href);
+          empty.hidden = true;
+          frame.hidden = false;
+          if (frame.src !== view.href) frame.src = view.href;
+        }
+
+        picks.forEach(pick => pick.addEventListener("click", (event) => {
+          if (!document.getElementById(pick.dataset.spec)) return;
+          event.preventDefault();
+          history.replaceState(null, "", "#" + pick.dataset.spec);
+          select(pick);
+        }));
+        document.querySelectorAll(".trace-variant").forEach(button => button.addEventListener("click", () => {
+          const pick = document.querySelector(".pick.selected");
+          if (!pick) return;
+          pick.dataset.slug = button.dataset.slug;
+          select(pick);
+        }));
+
+        const hash = decodeURIComponent(location.hash.replace(/^#/, ""));
+        const initial = picks.find(pick => pick.dataset.spec === hash)
+          || picks.find(pick => pick.dataset.status === "fail")
+          || picks[0];
+        if (initial) select(initial);
+        </script>
+        """;
 
     private static string DiffSection(SuiteDiff diff)
     {
@@ -230,15 +341,6 @@ public static class LivingDocEmitter
     /// <param name="Reports">Relative path from the current page to the run reports, or null.</param>
     internal sealed record Nav(string Root, string? Reports);
 
-    internal static string GroupAnchor(string group) =>
-        new(group.Select(c => char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-').ToArray());
-
-    internal static string Breadcrumbs(IEnumerable<(string Label, string? Href)> crumbs) =>
-        "<nav class=\"crumbs\" aria-label=\"Breadcrumb\">" +
-        string.Join(" <span>/</span> ", crumbs.Select(c =>
-            c.Href is null ? $"<strong>{Esc(c.Label)}</strong>" : $"<a href=\"{Esc(c.Href)}\">{Esc(c.Label)}</a>")) +
-        "</nav>";
-
     /// <summary>Site-wide top bar shared by every generated page, so each page links to every other section.</summary>
     internal static string TopBar(Nav nav, NavSection current)
     {
@@ -262,7 +364,7 @@ public static class LivingDocEmitter
   a.anchor { color:inherit; }
 """;
 
-    private static string Page(string title, string body, Nav nav, NavSection section) => $$"""
+    private static string Page(string title, string body, Nav nav) => $$"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -275,14 +377,11 @@ public static class LivingDocEmitter
   *,*::before,*::after { box-sizing:border-box; }
   body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; font-size:14px;
          line-height:1.55; color:var(--text); margin:0; }
-  main { max-width:860px; margin:0 auto; padding:24px 16px; }
-  h1 { font-size:22px; margin:0 0 4px; }
-  h2 { font-size:15px; margin:0 0 8px; }
-  h2.group { margin-top:24px; font-family:monospace; color:var(--muted); font-weight:500; }
-  .subtitle { color:var(--muted); font-size:13px; margin:0 0 20px; padding-bottom:16px; border-bottom:1px solid var(--border); }
-  a { color:var(--accent); text-decoration:none; } a:hover { text-decoration:underline; }
+  main { margin:0 auto; padding:12px 16px 16px; }
+  h2 { font-size:16px; margin:0 0 10px; }
+  .subtitle { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  a { color:inherit; text-decoration:none; }
   code { font-family:"SFMono-Regular",Consolas,monospace; font-size:12px; background:var(--alt); padding:1px 5px; border-radius:4px; }
-  .scenario { border:1px solid var(--border); border-radius:6px; padding:14px 16px; margin-bottom:14px; }
   .steps { list-style:none; margin:0; padding:0; }
   .steps li { padding:3px 0; }
   .kw { display:inline-block; min-width:52px; font-weight:700; font-size:12px; text-transform:uppercase; color:var(--info); }
@@ -293,22 +392,34 @@ public static class LivingDocEmitter
   .pill.bad { background:#ffebe9; color:#cf222e; }
   .pill.muted { background:var(--alt); color:var(--muted); }
   .dur { font-size:11px; color:var(--muted); font-family:monospace; font-weight:400; }
-  .scenario.pass { border-left:4px solid var(--ok); } .scenario.fail { border-left:4px solid #cf222e; }
   pre.error { background:#ffebe9; border:1px solid #cf222e; border-radius:6px; padding:8px 10px; font-size:12px; white-space:pre-wrap; margin:8px 0 0; }
-  .changes { border:1px solid var(--border); border-radius:6px; padding:12px 16px; margin-bottom:20px; background:var(--alt); }
+  .changes { border:1px solid var(--border); border-radius:6px; padding:12px 16px; margin-bottom:12px; background:var(--alt); }
   .changes ul { list-style:none; margin:0; padding:0; } .changes li { padding:3px 0; }
-  .cases, .note { color:var(--muted); font-size:12px; margin:8px 0 0; }
-  ul.features { list-style:none; padding:0; margin:0; }
-  ul.features > li { border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:10px; font-weight:600; }
+  .cases, .note, .empty { color:var(--muted); font-size:12px; margin:8px 0 0; }
+  .trace-variant { margin:8px 6px 0 0; font:inherit; font-size:12px; padding:2px 8px; border:1px solid var(--border); border-radius:20px; background:#fff; cursor:pointer; }
+  .screen { display:grid; grid-template-columns:240px minmax(260px, 360px) minmax(0, 1fr); gap:12px; height:calc(100vh - 58px); }
+  .list { overflow:auto; }
+  .group { margin:12px 0 4px; font-size:12px; color:var(--muted); }
+  .pick { display:block; padding:8px 10px; border:1px solid transparent; border-radius:6px; margin-bottom:4px; }
+  .pick:hover { background:var(--alt); }
+  .pick.selected { border-color:var(--accent); background:var(--info-bg); }
+  .spec { display:none; }
+  .spec.active { display:block; }
+  .spec-pane, .trace-pane { min-width:0; }
+  .spec-pane { overflow:auto; border:1px solid var(--border); border-radius:6px; padding:12px 14px; }
+  .trace-pane { display:flex; flex-direction:column; }
+  #trace-viewer { flex:1; width:100%; border:1px solid var(--border); border-radius:6px; background:var(--alt); }
   {{NavCss}}
-  ul.features ul { font-weight:400; color:var(--muted); font-size:13px; margin:6px 0 0; padding-left:18px; }
+  @media (max-width: 900px) {
+    .screen { grid-template-columns:1fr; height:auto; }
+    #trace-viewer { height:70vh; }
+  }
 </style>
 </head>
 <body>
-{{TopBar(nav, section)}}
+<header class="topbar"><a class="brand" href="{{Esc(nav.Root)}}index.html">Scenarios</a></header>
 <main>
 {{body}}
-<p class="subtitle" style="border:0;margin-top:24px">Generated by <strong>simplebehav-gen</strong> from test source.</p>
 </main></body>
 </html>
 """;

@@ -101,7 +101,7 @@ public sealed record SuiteManifest(int SchemaVersion, SuiteSummary Summary, IRea
 }
 
 /// <summary>One executed scenario read back from a bundle.json.</summary>
-public sealed record RunResult(string Title, string Status, long DurationMs, string? Error);
+public sealed record RunResult(string Title, string Status, long DurationMs, string? Error, string Slug);
 
 public static class ResultsLoader
 {
@@ -136,7 +136,8 @@ public static class ResultsLoader
                     root.GetProperty("title").GetString() ?? "",
                     root.GetProperty("status").GetString() ?? "fail",
                     root.TryGetProperty("durationMs", out var d) ? d.GetInt64() : 0,
-                    error));
+                    error,
+                    segments[^2]));
             }
             catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException)
             {

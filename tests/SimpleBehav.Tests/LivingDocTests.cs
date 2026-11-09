@@ -75,12 +75,12 @@ public class LivingDocTests
             var page = await File.ReadAllTextAsync(Path.Combine(outDir, "Booking", "SampleTests", "index.html"));
             Assert.That(page, Does.Contain("Plain Scenario").And.Contain("outcome two"));
             Assert.That(page, Does.Not.Contain("Unit Test Without Chain"));
-            Assert.That(page, Does.Contain("href=\"../../../reports/Booking/SampleTests/\""));
+            Assert.That(page, Does.Contain("id=\"trace-viewer\"").And.Contain("../../../reports/Booking/SampleTests/"));
             Assert.That(File.Exists(Path.Combine(outDir, "index.html")));
             Assert.That(File.Exists(Path.Combine(outDir, "suite.json")));
 
             var index = await File.ReadAllTextAsync(Path.Combine(outDir, "index.html"));
-            Assert.That(index, Does.Contain($"href=\"{GraphEmitter.FileName}\""));
+            Assert.That(index, Does.Contain("href=\"#Booking_SampleTests_Plain_Scenario\"").And.Contain("id=\"trace-viewer\""));
 
             var graph = await File.ReadAllTextAsync(Path.Combine(outDir, GraphEmitter.FileName));
             Assert.That(graph, Does.Contain("flowchart LR"));
@@ -159,6 +159,26 @@ public class LivingDocTests
 
     private static IReadOnlyList<Feature> SampleFeatures() =>
         [new Feature("SampleTests", "Booking", SpecParser.ParseTestSource(Source).Where(s => s.Steps.Count > 0).ToList())];
+
+    [Test]
+    public async Task ScenarioClick_CarriesItsTraceBesideTheSpec()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        WriteBundle(root, "Booking/SampleTests", "plain", "Plain_Scenario", "pass");
+        var outDir = Path.Combine(root, "livingdoc");
+        var runs = await ResultsLoader.LoadAsync(root);
+
+        try
+        {
+            await LivingDocEmitter.EmitAsync(SampleFeatures(), outDir, "../reports", SuiteManifest.Build(SampleFeatures(), runs), null, runs);
+            var page = await File.ReadAllTextAsync(Path.Combine(outDir, "index.html"));
+            Assert.That(page, Does.Contain("data-slug=\"plain\"").And.Contain("outcome two").And.Contain("trace-viewer/index.html"));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 
     [Test]
     public async Task Results_AreMatchedToScenarios_AndVariantsAreAggregated()

@@ -115,9 +115,10 @@ site rather than sending trace data to an external service.
 
 ### Living documentation
 
-`simplebehav-gen` turns the test source into a documentation site. Point it at a directory of C#,
-Kotlin, or TypeScript tests. The same Given / When / Then chain is read from each. The spec itself
-needs no test run, so it is always current; add the run's artifacts and every scenario also shows its result:
+`simplebehav-gen` turns the test source into one screen. Point it at a directory of C#, Kotlin, or
+TypeScript tests. Click a scenario and the Given / When / Then spec is on the left and its Playwright
+trace is on the right. The spec needs no test run, so it is always current; add the run's artifacts
+and every scenario also shows its result:
 
 ```
 simplebehav-gen --livingdoc tests/MyApp.Tests --out livingdoc \
@@ -128,12 +129,12 @@ simplebehav-gen --livingdoc tests/MyApp.Tests --out livingdoc \
 
 ```
 livingdoc/
-  index.html                  every feature and scenario, with status and changes since the baseline
+  index.html                  click a scenario: its spec and its Playwright trace, side by side
   graph.html                  separate LR page graph: Page → Feature → Given → When → Then (reuse of shared Givens)
   suite.json                  machine-readable manifest: stable scenario ids, steps, results (for tooling and agents)
   diff.json                   present when a baseline was supplied
   Booking/CheckoutTests/
-    index.html                Given / When / Then per scenario, parameterised cases, failure message
+    index.html                the same screen, limited to one test file
 ```
 
 A scenario's id is `<folders>/<TestFile>/<Method>`, so it survives renames of the display text.
