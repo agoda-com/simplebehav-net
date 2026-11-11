@@ -51,8 +51,13 @@ jobs:
           else
             version="${prefix}.${GITHUB_RUN_NUMBER}-preview"
           fi
-          for p in SimpleBehav SimpleBehav.NUnit SimpleBehav.SpecGen; do
-            dotnet pack "src/$p" --configuration Release -p:ContinuousIntegrationBuild=true -p:Version="$version" --output nupkgs
+          for p in \
+            DSL/dotnet/SimpleBehav \
+            Playwright/dotnet/SimpleBehav.Playwright \
+            Playwright/dotnet/SimpleBehav.NUnit \
+            LivingDoc/dotnet/SimpleBehav.SpecGen
+          do
+            dotnet pack "$p" --configuration Release -p:ContinuousIntegrationBuild=true -p:Version="$version" --output nupkgs
           done
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
@@ -61,6 +66,41 @@ jobs:
         with:
           name: nupkg
           path: nupkgs
+
+  kotlin:
+    name: Kotlin
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kotlin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Test
+        run: ./gradlew test --no-daemon
+      - name: Browser test
+        run: ./gradlew :simplebehav-playwright:browserTest --no-daemon
+
+  typescript:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test DSL
+        working-directory: DSL/typescript
+        run: npm install && npm test && npm run build
+      - name: Typecheck Playwright
+        working-directory: Playwright/typescript
+        run: npm install && npx tsc --noEmit
+      - name: Browser test
+        working-directory: Playwright/typescript
+        run: npx playwright install chromium && npm run test:browser
 
   deploy:
     needs: build

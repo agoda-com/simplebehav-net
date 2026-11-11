@@ -2,6 +2,15 @@
 [Bb]in/
 [Oo]bj/
 
+# Gradle
+.gradle/
+.kotlin/
+build/
+
+# Node
+node_modules/
+dist/
+
 # Test artifacts
 artifacts/
 

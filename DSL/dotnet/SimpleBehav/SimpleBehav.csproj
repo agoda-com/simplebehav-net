@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>SimpleBehav</PackageId>
+    <Description>Polyglot behavior DSL for SimpleBehav — fluent Given / When / Then scenarios and the shared artifact format. Ships Agent Skills for writing those scenarios.</Description>
+    <PackageTags>$(PackageTags);agent-skills;skills</PackageTags>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\..\.agents\skills\**\*" Link="contentFiles\any\any\skills\%(RecursiveDir)%(Filename)%(Extension)">
+      <Pack>true</Pack>
+      <PackagePath>contentFiles\any\any\skills\%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
+      <BuildAction>None</BuildAction>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Content>
+    <!-- build/ applies to a direct PackageReference. buildTransitive/ applies when SimpleBehav arrives through another package, such as SimpleBehav.NUnit. -->
+    <None Include="build\SimpleBehav.targets" Pack="true" PackagePath="build\SimpleBehav.targets" />
+    <None Include="build\SimpleBehav.targets" Pack="true" PackagePath="buildTransitive\SimpleBehav.targets" />
+    <None Include="build\skill.gitignore" Pack="true" PackagePath="build\skill.gitignore" />
+    <None Include="build\skill.gitignore" Pack="true" PackagePath="buildTransitive\skill.gitignore" />
+  </ItemGroup>
+
+</Project>

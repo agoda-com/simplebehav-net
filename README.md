@@ -1,6 +1,6 @@
 # SimpleBehav
 
-**Specs that prove themselves.** A behavior-driven test DSL for C# (TypeScript planned) on Playwright.
+**Specs that prove themselves.** A behavior-driven test DSL for C#, Kotlin, and TypeScript.
 Structured like Gherkin, built like production code.
 
 A requirement is normally written three times — in the ticket, in a feature file, in test code — and
@@ -22,7 +22,10 @@ product writes a prompt ─▶ agent writes the scenario ─▶ CI runs it ─�
 | Pass/fail on the living doc, `suite.json` manifest, and a "changes since baseline" list (added / removed / reworded / now failing) | ✅ shipped |
 | Visual "what changed" — step-level and screenshot diff, MR comment | 🔜 next |
 | Prompt → scenario via an MCP engine for Claude, extending missing building blocks on request | 🔜 planned |
-| TypeScript implementation emitting the same artifact formats | 🔜 planned |
+| Kotlin and TypeScript implementations emitting the same artifact formats (`bundle.json`, `cucumber.json`, suite `index.html`) | ✅ shipped |
+| Living documentation generated from Kotlin and TypeScript source | ✅ shipped |
+
+The Given / When / Then chain is the same in each language. Each language keeps its own build root: `SimpleBehav.sln` for C#, `kotlin/` for Kotlin (the DSL, the Playwright adapter, and a Ktor host adapter), and `package.json` projects under `DSL/typescript` and `Playwright/typescript`. `simplebehav-gen --livingdoc` reads `.cs`, `.kt`, and `.ts` test files.
 
 Why this suits agents: no step-binding layer to get wrong, about half the tokens per scenario of
 Gherkin ([comparison](docs/comparison.md)), and the C# compiler validates the structure
@@ -112,8 +115,10 @@ site rather than sending trace data to an external service.
 
 ### Living documentation
 
-`simplebehav-gen` turns the test source into a documentation site. The spec itself needs no test run,
-so it is always current; add the run's artifacts and every scenario also shows its result:
+`simplebehav-gen` turns the test source into one screen. Point it at a directory of C#, Kotlin, or
+TypeScript tests. Click a scenario and the Given / When / Then spec is on the left and its Playwright
+trace is on the right. The spec needs no test run, so it is always current; add the run's artifacts
+and every scenario also shows its result:
 
 ```
 simplebehav-gen --livingdoc tests/MyApp.Tests --out livingdoc \
@@ -124,12 +129,12 @@ simplebehav-gen --livingdoc tests/MyApp.Tests --out livingdoc \
 
 ```
 livingdoc/
-  index.html                  every feature and scenario, with status and changes since the baseline
+  index.html                  click a scenario: its spec and its Playwright trace, side by side
   graph.html                  separate LR page graph: Page → Feature → Given → When → Then (reuse of shared Givens)
   suite.json                  machine-readable manifest: stable scenario ids, steps, results (for tooling and agents)
   diff.json                   present when a baseline was supplied
   Booking/CheckoutTests/
-    index.html                Given / When / Then per scenario, parameterised cases, failure message
+    index.html                the same screen, limited to one test file
 ```
 
 A scenario's id is `<folders>/<TestFile>/<Method>`, so it survives renames of the display text.

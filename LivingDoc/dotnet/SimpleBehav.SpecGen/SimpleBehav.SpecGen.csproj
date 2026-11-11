@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>SimpleBehav.SpecGen</PackageId>
+    <Description>CLI tool — generates SimpleBehav test stubs from spec markdown files, and generates markdown docs from passing SimpleBehav test classes.</Description>
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>simplebehav-gen</ToolCommandName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.2" />
+    <ProjectReference Include="..\..\..\DSL\dotnet\SimpleBehav\SimpleBehav.csproj" />
+  </ItemGroup>
+
+</Project>

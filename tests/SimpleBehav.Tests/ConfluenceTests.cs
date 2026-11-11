@@ -376,8 +376,8 @@ public class ConfluenceTests
         {
             ["Booking/SampleTests"] =
             [
-                new("Plain_Scenario", "pass", 12, null),
-                new("Parameterised_Scenario[THB]", "fail", 5, "total ]]> missing"),
+                new("Plain_Scenario", "pass", 12, null, "plain"),
+                new("Parameterised_Scenario[THB]", "fail", 5, "total ]]> missing", "thb"),
             ],
         };
         var diff = new SuiteDiff([
