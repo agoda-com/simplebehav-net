@@ -100,6 +100,7 @@ internal class ScenarioRunner(
         val emitter = ArtifactEmitter(scenarioName)
         var status = "pass"
         var failureMessage: String? = null
+        var failure: Throwable? = null
         val context = adapter.createContext()
         val trace = adapter as? ScenarioTrace
         trace?.startTrace()
@@ -107,7 +108,10 @@ internal class ScenarioRunner(
             runGiven(context, emitter)
             runWhen(context, emitter)
             runThen(context, assertions, emitter)
-        } catch (ex: Exception) {
+        } catch (ex: Throwable) {
+            // AssertionError is a test failure; other JVM errors must still escape immediately.
+            if (ex !is Exception && ex !is AssertionError) throw ex
+            failure = ex
             status = "fail"
             failureMessage = ex.message
             emitter.add(
@@ -115,16 +119,30 @@ internal class ScenarioRunner(
             )
         }
 
-        val bundle = emitter.build(status)
-        val dir = emitter.emit(bundle, outDir, suitePath)
-        val suiteDir = dir.parent ?: error("[simplebehav] scenario directory has no suite parent")
-        val traceViewerBase = "../".repeat(suitePath.size) + "trace-viewer/index.html"
-        SuiteReporter.write(suiteDir, suitePath.last(), traceViewerBase)
-        trace?.stopTrace(dir.resolve("trace.zip"))
-        trace?.ensureViewer(java.nio.file.Path.of(outDir))
+        try {
+            val bundle = emitter.build(status)
+            val dir = emitter.emit(bundle, outDir, suitePath)
+            val suiteDir = dir.parent ?: error("[simplebehav] scenario directory has no suite parent")
+            val traceViewerBase = "../".repeat(suitePath.size) + "trace-viewer/index.html"
+            try {
+                SuiteReporter.write(suiteDir, suitePath.last(), traceViewerBase)
+            } finally {
+                try {
+                    trace?.stopTrace(dir.resolve("trace.zip"))
+                } finally {
+                    trace?.ensureViewer(java.nio.file.Path.of(outDir))
+                }
+            }
+        } catch (ex: Throwable) {
+            if (ex !is Exception && ex !is AssertionError) throw ex
+            // Diagnostics must not replace the test failure, but must fail an otherwise passing test.
+            val scenarioFailure = failure ?: throw ex
+            if (ex !== scenarioFailure) scenarioFailure.addSuppressed(ex)
+        }
 
-        if (status == "fail") {
-            error("[simplebehav] \"$scenarioName\" failed: $failureMessage")
+        if (failure is AssertionError) throw failure
+        if (failure != null) {
+            throw IllegalStateException("[simplebehav] \"$scenarioName\" failed: $failureMessage", failure)
         }
     }
 
