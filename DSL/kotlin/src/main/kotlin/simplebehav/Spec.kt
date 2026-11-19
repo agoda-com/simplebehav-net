@@ -119,26 +119,13 @@ internal class ScenarioRunner(
             )
         }
 
-        try {
-            val bundle = emitter.build(status)
-            val dir = emitter.emit(bundle, outDir, suitePath)
-            val suiteDir = dir.parent ?: error("[simplebehav] scenario directory has no suite parent")
-            val traceViewerBase = "../".repeat(suitePath.size) + "trace-viewer/index.html"
-            try {
-                SuiteReporter.write(suiteDir, suitePath.last(), traceViewerBase)
-            } finally {
-                try {
-                    trace?.stopTrace(dir.resolve("trace.zip"))
-                } finally {
-                    trace?.ensureViewer(java.nio.file.Path.of(outDir))
-                }
-            }
-        } catch (ex: Throwable) {
-            if (ex !is Exception && ex !is AssertionError) throw ex
-            // Diagnostics must not replace the test failure, but must fail an otherwise passing test.
-            val scenarioFailure = failure ?: throw ex
-            if (ex !== scenarioFailure) scenarioFailure.addSuppressed(ex)
-        }
+        val bundle = emitter.build(status)
+        val dir = emitter.emit(bundle, outDir, suitePath)
+        val suiteDir = dir.parent ?: error("[simplebehav] scenario directory has no suite parent")
+        val traceViewerBase = "../".repeat(suitePath.size) + "trace-viewer/index.html"
+        SuiteReporter.write(suiteDir, suitePath.last(), traceViewerBase)
+        trace?.stopTrace(dir.resolve("trace.zip"))
+        trace?.ensureViewer(java.nio.file.Path.of(outDir))
 
         if (failure is AssertionError) throw failure
         if (failure != null) {
