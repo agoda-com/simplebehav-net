@@ -100,6 +100,7 @@ internal class ScenarioRunner(
         val emitter = ArtifactEmitter(scenarioName)
         var status = "pass"
         var failureMessage: String? = null
+        var failure: Throwable? = null
         val context = adapter.createContext()
         val trace = adapter as? ScenarioTrace
         trace?.startTrace()
@@ -107,7 +108,10 @@ internal class ScenarioRunner(
             runGiven(context, emitter)
             runWhen(context, emitter)
             runThen(context, assertions, emitter)
-        } catch (ex: Exception) {
+        } catch (ex: Throwable) {
+            // AssertionError is a test failure; other JVM errors must still escape immediately.
+            if (ex !is Exception && ex !is AssertionError) throw ex
+            failure = ex
             status = "fail"
             failureMessage = ex.message
             emitter.add(
@@ -123,8 +127,9 @@ internal class ScenarioRunner(
         trace?.stopTrace(dir.resolve("trace.zip"))
         trace?.ensureViewer(java.nio.file.Path.of(outDir))
 
-        if (status == "fail") {
-            error("[simplebehav] \"$scenarioName\" failed: $failureMessage")
+        if (failure is AssertionError) throw failure
+        if (failure != null) {
+            throw IllegalStateException("[simplebehav] \"$scenarioName\" failed: $failureMessage", failure)
         }
     }
 
